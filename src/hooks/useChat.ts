@@ -4,6 +4,9 @@ import { useCallback, useState } from "react";
 import type { Conversation, Message } from "@/types/chat";
 import { createId } from "@/lib/id";
 
+// 模型类型
+export type AIModel = "openai" | "gemini";
+
 const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: "demo-1",
@@ -48,14 +51,16 @@ function deriveTitle(messages: Message[]): string {
   return text.length > 24 ? `${text.slice(0, 24)}…` : text;
 }
 
-function mockAssistantReply(userMessage: string): string {
+function mockAssistantReply(userMessage: string, model: AIModel): string {
   const trimmed = userMessage.trim();
   if (!trimmed) {
     return "请告诉我你想聊些什么，我很乐意帮忙。";
   }
-  return `感谢你的提问。关于「${trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed}」，这是一个很好的话题。\n\n目前这是演示模式，尚未连接真实 AI API。接入 OpenAI API Key 后，这里会显示真实的智能回复。`;
+  const modelName = model === "gemini" ? "Gemini" : "OpenAI";
+  return `感谢你的提问。关于「${trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed}」，这是一个很好的话题。\n\n目前这是演示模式，尚未连接真实 AI API。配置 ${modelName} API Key 后，这里会显示真实的智能回复。`;
 }
 
+// OpenAI API 调用
 async function callOpenAI(apiKey: string, messages: Message[]): Promise<string> {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -82,12 +87,59 @@ async function callOpenAI(apiKey: string, messages: Message[]): Promise<string> 
   return data.choices[0].message.content;
 }
 
+// Google Gemini API 调用
+async function callGemini(apiKey: string, messages: Message[]): Promise<string> {
+  // 转换消息格式
+  const contents = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || "API 请求失败");
+  }
+
+  const data = await response.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+// 根据模型调用对应的 API
+async function callAI(
+  apiKey: string,
+  model: AIModel,
+  messages: Message[]
+): Promise<string> {
+  if (model === "gemini") {
+    return callGemini(apiKey, messages);
+  }
+  return callOpenAI(apiKey, messages);
+}
+
 export function useChat() {
   const [conversations, setConversations] =
     useState<Conversation[]>(INITIAL_CONVERSATIONS);
   const [activeId, setActiveId] = useState(INITIAL_CONVERSATIONS[0].id);
   const [isLoading, setIsLoading] = useState(false);
   const [apiKey, setApiKey] = useState("");
+  const [aiModel, setAiModel] = useState<AIModel>("openai");
 
   const activeConversation =
     conversations.find((c) => c.id === activeId) ?? conversations[0];
@@ -160,18 +212,18 @@ export function useChat() {
         try {
           const currentConv = conversations.find((c) => c.id === activeId);
           const allMessages = currentConv?.messages || [];
-          replyContent = await callOpenAI(apiKey, [
+          replyContent = await callAI(apiKey, aiModel, [
             ...allMessages,
             userMessage,
           ]);
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : "未知错误";
           const cleanError = errorMsg.replace(/https?:\/\/[^\s]+/g, "").trim();
-          replyContent = `API 调用失败: ${cleanError}\n\n将使用演示模式回复：\n${mockAssistantReply(trimmed)}`;
+          replyContent = `API 调用失败: ${cleanError}\n\n将使用演示模式回复：\n${mockAssistantReply(trimmed, aiModel)}`;
         }
       } else {
         await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
-        replyContent = mockAssistantReply(trimmed);
+        replyContent = mockAssistantReply(trimmed, aiModel);
       }
 
       const assistantMessage: Message = {
@@ -195,7 +247,7 @@ export function useChat() {
 
       setIsLoading(false);
     },
-    [activeId, isLoading, apiKey, conversations],
+    [activeId, isLoading, apiKey, aiModel, conversations],
   );
 
   return {
@@ -204,7 +256,9 @@ export function useChat() {
     activeId,
     isLoading,
     apiKey,
+    aiModel,
     setApiKey,
+    setAiModel,
     setActiveId,
     createConversation,
     deleteConversation,

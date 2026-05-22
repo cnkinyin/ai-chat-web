@@ -14,7 +14,9 @@ export function ChatApp() {
     activeId,
     isLoading,
     apiKey,
+    aiModel,
     setApiKey,
+    setAiModel,
     setActiveId,
     createConversation,
     deleteConversation,
@@ -33,6 +35,8 @@ export function ChatApp() {
         onDelete={deleteConversation}
         apiKey={apiKey}
         onApiKeyChange={setApiKey}
+        aiModel={aiModel}
+        onAiModelChange={setAiModel}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">

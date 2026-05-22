@@ -12,7 +12,8 @@
 - 💬 **对话管理** - 支持新建、切换、删除对话
 - 🎨 **深色主题** - 精心设计的深色用户界面
 - ⌨️ **快捷键** - Enter 发送消息，Shift+Enter 换行
-- 🔑 **API Key 配置** - 支持接入 OpenAI API，使用真实的 AI 回复
+- 🤖 **多模型支持** - 支持 OpenAI GPT 和 Google Gemini 自由切换
+- 🔑 **API Key 配置** - 支持配置多个 AI 提供商的 API Key
 - 🎭 **演示模式** - 无需配置 API Key，即可体验聊天功能
 - 📱 **响应式设计** - 适配不同尺寸的屏幕
 
@@ -55,11 +56,23 @@ npm start
 
 项目默认运行在演示模式下，无需配置任何 API。可以体验基本的聊天界面和功能。
 
-### 接入 OpenAI API
+### 接入 AI API
+
+支持 **OpenAI** 和 **Google Gemini** 两种 AI 模型：
+
+#### OpenAI 配置
 
 1. 获取 OpenAI API Key（访问 [OpenAI 官网](https://platform.openai.com/api-keys)）
-2. 在应用左侧底部的 **API Key** 输入框中粘贴你的 Key
-3. 系统会自动切换到真实 AI 对话模式
+2. 在应用左侧底部的模型选择器中选择 **"OpenAI (GPT-3.5)"**
+3. 在 **API Key** 输入框中粘贴你的 Key（格式：`sk-...`）
+4. 系统会自动切换到真实 AI 对话模式
+
+#### Google Gemini 配置
+
+1. 获取 Google Gemini API Key（访问 [Google AI Studio](https://makersuite.google.com/app/apikey)）
+2. 在应用左侧底部的模型选择器中选择 **"Google Gemini"**
+3. 在 **API Key** 输入框中粘贴你的 Key（格式：`AIza...`）
+4. 系统会自动切换到 Gemini AI 对话模式
 
 ### 对话操作
 
@@ -103,10 +116,11 @@ ai-chat-web/
 
 ## API 配置说明
 
-应用支持通过 OpenAI API 进行真实的 AI 对话。在 `src/hooks/useChat.ts` 中：
+应用支持通过 OpenAI 和 Google Gemini API 进行真实的 AI 对话。核心代码位于 `src/hooks/useChat.ts`：
+
+### OpenAI API 调用
 
 ```typescript
-// 调用 OpenAI API 的函数
 async function callOpenAI(apiKey: string, messages: Message[]) {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -115,18 +129,57 @@ async function callOpenAI(apiKey: string, messages: Message[]) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-3.5-turbo",  // 可根据需要更换模型
+      model: "gpt-3.5-turbo",
       messages: messages.map((m) => ({
         role: m.role,
         content: m.content,
       })),
+      temperature: 0.7,
     }),
   });
-  // ...
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || "API 请求失败");
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
 }
 ```
 
-如需使用其他 AI 提供商（如 Anthropic、Google 等），请修改此函数。
+### Google Gemini API 调用
+
+```typescript
+async function callGemini(apiKey: string, messages: Message[]) {
+  const contents = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+        },
+      }),
+    }
+  );
+
+  const data = await response.json();
+  return data.candidates[0].content.parts[0].text;
+}
+```
+
+如需添加更多 AI 提供商（如 Anthropic Claude 等），可以在 `src/hooks/useChat.ts` 中添加相应的调用函数。
 
 ## License
 
@@ -137,4 +190,5 @@ MIT License - 欢迎使用和贡献！
 - [Next.js](https://nextjs.org/) - React 框架
 - [Tailwind CSS](https://tailwindcss.com/) - CSS 框架
 - [Lucide](https://lucide.dev/) - 漂亮的图标
-- [OpenAI](https://openai.com/) - AI 技术支持
+- [OpenAI](https://openai.com/) - GPT 模型支持
+- [Google](https://deepmind.google/gemini) - Gemini 模型支持

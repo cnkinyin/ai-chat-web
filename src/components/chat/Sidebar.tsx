@@ -9,8 +9,10 @@ import {
   Sparkles,
   Eye,
   EyeOff,
+  Bot,
 } from "lucide-react";
 import type { Conversation } from "@/types/chat";
+import type { AIModel } from "@/hooks/useChat";
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -22,6 +24,8 @@ interface SidebarProps {
   onDelete: (id: string) => void;
   apiKey: string;
   onApiKeyChange: (key: string) => void;
+  aiModel: AIModel;
+  onAiModelChange: (model: AIModel) => void;
 }
 
 function formatRelativeTime(timestamp: number): string {
@@ -46,6 +50,8 @@ export function Sidebar({
   onDelete,
   apiKey,
   onApiKeyChange,
+  aiModel,
+  onAiModelChange,
 }: SidebarProps) {
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -154,6 +160,23 @@ export function Sidebar({
       </nav>
 
       <div className="border-t border-[var(--border)] px-4 py-3">
+        {/* 模型选择 */}
+        <div className="mb-2">
+          <label className="mb-1.5 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-[var(--muted)]">
+            <Bot className="h-3 w-3" />
+            AI 模型
+          </label>
+          <select
+            value={aiModel}
+            onChange={(e) => onAiModelChange(e.target.value as AIModel)}
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[var(--border-focus)] focus:outline-none"
+          >
+            <option value="openai">OpenAI (GPT-3.5)</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
+        </div>
+
+        {/* API Key 输入 */}
         <div className="mb-2">
           <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-[var(--muted)]">
             API Key
@@ -163,7 +186,7 @@ export function Sidebar({
               type={showApiKey ? "text" : "password"}
               value={apiKey}
               onChange={(e) => onApiKeyChange(e.target.value)}
-              placeholder="sk-..."
+              placeholder={aiModel === "gemini" ? "AIza..." : "sk-..."}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[var(--border-focus)] focus:outline-none"
             />
             <button
@@ -181,20 +204,21 @@ export function Sidebar({
             {apiKey && (
               <div
                 className={`absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full ${
-                  apiKey.startsWith("sk-")
+                  (aiModel === "gemini" && apiKey.startsWith("AIza")) ||
+                  (aiModel === "openai" && apiKey.startsWith("sk-"))
                     ? "bg-[var(--accent)]"
                     : "bg-yellow-500"
                 }`}
-                title={apiKey.startsWith("sk-") ? "格式正确" : "格式可能不正确"}
+                title="API Key 已配置"
               />
             )}
           </div>
         </div>
         <p className="text-[11px] text-[var(--muted)]">
           {apiKey
-            ? apiKey.startsWith("sk-")
-              ? "API Key 已配置"
-              : "API Key 格式不正确"
+            ? aiModel === "gemini"
+              ? "Gemini API 已配置"
+              : "OpenAI API 已配置"
             : "演示模式 · 未连接 API"}
         </p>
       </div>
